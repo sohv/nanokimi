@@ -1,0 +1,41 @@
+__pycache__/
+
+# Data files
+*.bin
+*.jsonl
+*.txt
+!requirements.txt
+!README.txt
+
+out/
+logs/
+runs/
+wandb/
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# Environment
+.env
+.venv
+env/
+venv/
+
+
+.ipynb_checkpoints/
+*.ipynb
+
+# model checkpoints and cache
+.cache/
+models/
+checkpoints/
+
+# temporary files
+tmp/
+temp/
+
+# Data directory (except prepare.py)
+data/*.bin
+data/*.pkl
+data/shakespeare.txt

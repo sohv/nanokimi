@@ -1,0 +1,12 @@
+torch
+numpy
+transformers
+datasets
+requests
+tiktoken
+tqdm
+matplotlib
+seaborn
+
+# Optional: for logging and experiment tracking
+wandb
