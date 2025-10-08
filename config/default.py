@@ -66,7 +66,7 @@ system_config = {
 
 # Wandb logging
 wandb_config = {
-    'wandb_log': False,
+    'wandb_log': True,
     'wandb_project': 'nanokimi',
     'wandb_run_name': 'kimi-k2-toy',
 }

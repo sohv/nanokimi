@@ -51,7 +51,11 @@ def estimate_loss(model, data_loader, eval_iters, device, ctx):
     with torch.no_grad():
         for k in range(eval_iters):
             try:
-                X, Y = next(iter(data_loader))
+                # data_loader is a function that returns (X, Y) batches
+                if callable(data_loader):
+                    X, Y = data_loader()
+                else:
+                    X, Y = next(iter(data_loader))
                 X, Y = X.to(device), Y.to(device)
                 with ctx:
                     logits, loss = model(X, Y)

@@ -11,7 +11,7 @@ Inspired by [nanoGPT](https://github.com/karpathy/nanoGPT), nanoKimi implements 
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/nanokimi.git
+git clone https://github.com/sohv/nanokimi.git
 cd nanokimi
 
 # 2. Setup environment and dependencies
