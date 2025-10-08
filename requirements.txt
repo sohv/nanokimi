@@ -7,6 +7,6 @@ tiktoken
 tqdm
 matplotlib
 seaborn
-
-# Optional: for logging and experiment tracking
+gradio
+tiktoken
 wandb

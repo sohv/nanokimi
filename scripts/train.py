@@ -1,56 +1,68 @@
-#!/usr/bin/env python3
-"""
-Training script for nanoKimi
-
-Train a Kimi-K2 model on the Shakespeare dataset.
-"""
-
 import os
 import sys
+import argparse
 import time
 import math
 import pickle
+import importlib
 from contextlib import nullcontext
-
 import torch
 import torch.nn.functional as F
-
-# Add src to path so we can import our modules
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
 from model import KimiK2
 from optimizer import create_muon_optimizer
 from utils import get_device, get_dtype, get_ctx, estimate_loss, get_lr, save_checkpoint, count_parameters, Timer
 
-# Add data to path
+# add data to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'data'))
 from prepare import get_batch, prepare_shakespeare_data
 
-# Import configurations
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'config'))
-from default import model_config, train_config, muon_config, data_config, system_config, wandb_config
+# add src to path so we can import our modules
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+# Dynamic configuration selection - path setup for config imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 
 
 def main():
-    print("=" * 60)
-    print("nanoKimi Training Script")
-    print("Training Kimi-K2 with Muon optimizer")
-    print("=" * 60)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', default='default', help='Config module name under config/ (default|openwebtext)')
+    parsed_args = parser.parse_args()
+
+    # load requested config dynamically
+    cfg_name = parsed_args.config
+    try:
+        cfg_mod = importlib.import_module(f'config.{cfg_name}')
+    except ModuleNotFoundError:
+        raise RuntimeError(f"Config module 'config.{cfg_name}' not found. Available configs: default, openwebtext")
+
+    # Extract required configuration dictionaries
+    required = ['model_config', 'train_config', 'muon_config', 'data_config', 'system_config', 'wandb_config']
+    for r in required:
+        if not hasattr(cfg_mod, r):
+            raise RuntimeError(f"Config module 'config.{cfg_name}' missing required '{r}'")
+
+    # Assign config dictionaries
+    model_config = cfg_mod.model_config
+    train_config = cfg_mod.train_config
+    muon_config = cfg_mod.muon_config
+    data_config = cfg_mod.data_config
+    system_config = cfg_mod.system_config
+    wandb_config = cfg_mod.wandb_config
+
+    print("========== nanoKimi training =============")
     
-    # Setup directories
+    # ======= setup directories, device, dtype =======
     out_dir = 'out'
     os.makedirs(out_dir, exist_ok=True)
-    
-    # Setup device and dtype
     device = get_device() if system_config['device'] == 'auto' else system_config['device']
     dtype = get_dtype(system_config['dtype'])
     print(f"Using device: {device}")
     print(f"Using dtype: {dtype}")
     
-    # Setup context for autocast
+    # setup context for autocast
     ctx = get_ctx(device, dtype)
     
-    # Prepare data if needed
     data_dir = data_config['data_dir']
     if not os.path.exists(os.path.join(data_dir, 'meta.pkl')):
         print("Preparing Shakespeare data...")
@@ -227,7 +239,6 @@ def main():
     
     if wandb_config['wandb_log']:
         wandb.finish()
-
 
 if __name__ == "__main__":
     main()
