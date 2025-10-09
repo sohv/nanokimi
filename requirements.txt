@@ -10,3 +10,4 @@ seaborn
 gradio
 tiktoken
 wandb
+huggingface_hub

@@ -1,3 +1,11 @@
+# Ignore model checkpoints and large files
+/out/
+/*.pt
+/*.bin
+*.ckpt
+weights/
+__pycache__/
+.venv/
 __pycache__/
 
 # Data files
