@@ -22,7 +22,7 @@ model_config = {
 
 # Training configuration
 train_config = {
-    'batch_size': 64,
+    'batch_size': 16,  # Reduced from 64 to fit in GPU memory
     'block_size': 256,
     'max_iters': 5000,
     'lr_decay_iters': 5000,
@@ -60,7 +60,7 @@ system_config = {
     'dtype': 'bfloat16',  # 'float32', 'bfloat16', or 'float16'
     'compile': True,  # use PyTorch 2.0 to compile the model to be faster
     'profile': False,  # use pytorch profiler
-    'gradient_accumulation_steps': 1,
+    'gradient_accumulation_steps': 2,  # Accumulate gradients over 2 steps (effective batch_size = 16*2 = 32)
     'grad_clip': 1.0,
 }
 

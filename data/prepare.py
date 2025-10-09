@@ -12,9 +12,7 @@ import tiktoken
 import numpy as np
 from pathlib import Path
 
-
 def download_shakespeare(data_dir):
-    """Download the tiny Shakespeare dataset"""
     data_dir = Path(data_dir)
     data_dir.mkdir(exist_ok=True)
     
@@ -38,35 +36,26 @@ def download_shakespeare(data_dir):
 
 
 def prepare_shakespeare_data(data_dir='data', encoding_name='gpt2'):
-    """
-    Prepare the Shakespeare dataset for training
-    
-    Args:
-        data_dir: directory to store data files
-        encoding_name: tiktoken encoding to use ('gpt2', 'cl100k_base', etc.)
-    """
     data_dir = Path(data_dir)
-    
-    # Download the dataset
     input_file = download_shakespeare(data_dir)
-    
-    # Load the text
+
+    # load the text
     with open(input_file, 'r', encoding='utf-8') as f:
         data = f.read()
     
     print(f"Length of dataset in characters: {len(data):,}")
     
-    # Get the tokenizer
+    # use tokenizer
     enc = tiktoken.get_encoding(encoding_name)
-    
-    # Encode the text
-    train_ids = enc.encode_ordinary(data)
-    print(f"Length of dataset in tokens: {len(train_ids):,}")
+
+    # encode the text
+    encoded_data = enc.encode_ordinary(data)
+    print(f"Length of dataset in tokens: {len(encoded_data):,}")
     
     # Create train/val split
-    n = len(train_ids)
-    train_ids = train_ids[:int(n*0.9)]
-    val_ids = train_ids[int(n*0.9):]
+    n = len(encoded_data)
+    train_ids = encoded_data[:int(n*0.9)]
+    val_ids = encoded_data[int(n*0.9):]
     
     print(f"Train tokens: {len(train_ids):,}")
     print(f"Val tokens: {len(val_ids):,}")
@@ -127,7 +116,6 @@ class ShakespeareDataset:
             raise FileNotFoundError(f"Data file {data_file} not found. Run prepare_data() first.")
         
         self.data = np.memmap(data_file, dtype=np.uint16, mode='r')
-        print(f"Loaded {split} data: {len(self.data):,} tokens")
     
     def __len__(self):
         return len(self.data) - self.block_size
