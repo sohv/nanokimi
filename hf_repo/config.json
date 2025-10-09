@@ -1,0 +1,25 @@
+{
+  "model_type": "kimi-k2",
+  "vocab_size": 50304,
+  "n_layer": 12,
+  "n_head": 12,
+  "n_embd": 768,
+  "dropout": 0.0,
+  "bias": true,
+  "use_moe": true,
+  "num_experts": 8,
+  "expert_capacity": 32,
+  "top_k_experts": 2,
+  "use_latent_attention": true,
+  "latent_dim": 64,
+  "block_size": 256,
+  "tokenizer": "tiktoken/gpt2",
+  "architectures": [
+    "KimiK2ForCausalLM"
+  ],
+  "torch_dtype": "float32",
+  "auto_map": {
+    "AutoConfig": "modeling_kimik2.KimiK2Config",
+    "AutoModelForCausalLM": "modeling_kimik2.KimiK2ForCausalLM"
+  }
+}
