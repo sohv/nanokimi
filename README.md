@@ -2,6 +2,8 @@
 
 The simplest, fastest repository for training/finetuning Kimi-K2 models.
 
+<!-- https://huggingface.co/datasets/karpathy/tiny_shakespeare -->
+
 Inspired by [nanoGPT](https://github.com/karpathy/nanoGPT), nanoKimi implements the Kimi-K2 architecture with key innovations:
 - **Muon Optimizer**: Advanced optimization technique for faster convergence
 - **Mixture of Experts (MoE)**: Efficient scaling with expert routing
