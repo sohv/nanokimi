@@ -17,8 +17,7 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 # Ensure src package is importable
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-from model import KimiK2
+from nanokimi.model.transformer import KimiK2
 
 # Environment/config
 MODEL_REPO = os.environ.get('NANOKIMI_MODEL_REPO', None)  # e.g. 'user/nanokimi-mini'

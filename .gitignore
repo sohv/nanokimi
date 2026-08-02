@@ -1,49 +1,23 @@
-# Ignore model checkpoints and large files
-/out/
-/*.pt
-/*.bin
-*.ckpt
-weights/
 __pycache__/
+*.py[cod]
 .venv/
-__pycache__/
-
-# Data files
-*.bin
-*.jsonl
-*.txt
-!requirements.txt
-!README.txt
-
-out/
-logs/
-runs/
-wandb/
-*.png
-*.jpg
-*.jpeg
-*.pdf
-
-# Environment
-.env
-.venv
-env/
 venv/
+.env
+*.egg-info/
+build/
+dist/
 
+# data and run outputs are files, not code
+data/raw/
+data/processed/
+results/raw/
+exports/
+*.bin
+*.pt
+*.safetensors
+*.log
 
-.ipynb_checkpoints/
-*.ipynb
-
-# model checkpoints and cache
-.cache/
-models/
-checkpoints/
-
-# temporary files
-tmp/
-temp/
-
-# Data directory (except prepare.py)
-data/*.bin
-data/*.pkl
-data/shakespeare.txt
+wandb/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
