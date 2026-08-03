@@ -42,3 +42,4 @@ ignore = ["E501", "E402", "E741", "F841", "F403", "F401"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: exercises torch.compile or long training; deselect with -m 'not slow'"]

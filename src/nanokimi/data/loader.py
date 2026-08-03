@@ -65,8 +65,14 @@ def get_batch(
     if limit <= block_size + 1:
         raise ValueError(f"split '{split}' has {limit} usable tokens, need more than block_size+1={block_size + 1}")
 
-    rng = generator if generator is not None else np.random.default_rng()
-    starts = rng.integers(0, limit - block_size - 1, size=batch_size)
+    # Falling back to np.random.default_rng() here would seed from OS entropy and
+    # silently ignore set_seed, making data order irreproducible. The legacy global
+    # is what np.random.seed() in set_seed actually controls, so it is the correct
+    # default; callers that need an isolated stream pass their own generator.
+    if generator is None:
+        starts = np.random.randint(0, limit - block_size - 1, size=batch_size)
+    else:
+        starts = generator.integers(0, limit - block_size - 1, size=batch_size)
 
     x = np.stack([data[i : i + block_size].astype(np.int64) for i in starts])
     y = np.stack([data[i + 1 : i + 1 + block_size].astype(np.int64) for i in starts])

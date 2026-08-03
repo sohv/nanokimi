@@ -89,7 +89,11 @@ class MoELayer(nn.Module):
             # single routing weight.
             weight = (top_k_scores[token_idx] * hit[token_idx]).sum(dim=-1, keepdim=True)                  # Added a vectorized lookup of each token's routing weight for this expert.
             expert_output = self.experts[expert_idx](x_flat[token_idx])                                    # Modified to run the expert on the final token set after any capacity trim.
-            output.index_add_(0, token_idx, weight * expert_output)                                        # Modified to scatter results with index_add_, replacing the Python loop that ran once per token.
+            # Under autocast the experts emit bf16 while `output` stays fp32, and
+            # index_add_ refuses mixed dtypes. Casting the source keeps the running
+            # sum in fp32, which is also where we want to accumulate across experts.
+            contribution = (weight * expert_output).to(output.dtype)                                       # Added the dtype cast that makes the MoE work under bf16 autocast; without it every CUDA run crashed here.
+            output.index_add_(0, token_idx, contribution)                                                  # Modified to scatter results with index_add_, replacing the Python loop that ran once per token.
 
         # Reshape back to original shape
         output = output.view(B, T, C)

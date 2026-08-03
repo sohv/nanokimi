@@ -9,6 +9,7 @@ import math
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from nanokimi.data.loader import get_batch, load_meta, split_tokens
@@ -31,12 +32,16 @@ LOGGER = logging.getLogger(__name__)
 
 
 @torch.no_grad()
-def estimate_loss(model, data_dir, split, batch_size, block_size, device, ctx, eval_iters, max_tokens=None):
+def estimate_loss(
+    model, data_dir, split, batch_size, block_size, device, ctx, eval_iters, max_tokens=None, generator=None
+):
     """Mean loss over eval_iters batches. Returns a float."""
     model.eval()
     losses = torch.zeros(eval_iters)
     for i in range(eval_iters):
-        x, y = get_batch(data_dir, split, batch_size, block_size, device, max_tokens=max_tokens)
+        x, y = get_batch(
+            data_dir, split, batch_size, block_size, device, generator=generator, max_tokens=max_tokens
+        )
         with ctx:
             _, loss = model(x, y)
         losses[i] = loss.item()
@@ -97,6 +102,12 @@ def train(config: RunConfig) -> dict:
 
         run = wandb.init(project=config.wandb_project, name=config.run_name or None, config=_wandb_config(config))
 
+    # Separate streams: eval draws must not advance the training stream, or changing
+    # eval_interval would silently change which tokens a run trains on. Each eval gets
+    # a freshly seeded generator so every evaluation scores the same val batches,
+    # making val curves comparable across steps and across runs.
+    train_rng = np.random.default_rng(config.seed)
+
     metrics = MetricsWriter(output_dir)
     ckpt_dir = output_dir / "checkpoints"
     best_val_loss = math.inf
@@ -110,7 +121,8 @@ def train(config: RunConfig) -> dict:
 
         for _ in range(config.train.gradient_accumulation_steps):
             x, y = get_batch(
-                config.data_dir, "train", config.train.batch_size, block_size, device, max_tokens=train_budget
+                config.data_dir, "train", config.train.batch_size, block_size, device,
+                generator=train_rng, max_tokens=train_budget,
             )
             with ctx:
                 _, loss = model(x, y)
@@ -151,7 +163,7 @@ def train(config: RunConfig) -> dict:
         if step > 0 and step % config.train.eval_interval == 0:
             val_loss = estimate_loss(
                 model, config.data_dir, "val", config.train.batch_size, block_size, device, ctx,
-                config.train.eval_iters,
+                config.train.eval_iters, generator=np.random.default_rng(config.seed + 1),
             )
             metrics.log(step=step, tokens_seen=tokens_seen, val_loss=val_loss)
             if run:
@@ -166,7 +178,8 @@ def train(config: RunConfig) -> dict:
                 )
 
     final_val = estimate_loss(
-        model, config.data_dir, "val", config.train.batch_size, block_size, device, ctx, config.train.eval_iters
+        model, config.data_dir, "val", config.train.batch_size, block_size, device, ctx,
+        config.train.eval_iters, generator=np.random.default_rng(config.seed + 1),
     )
     save_checkpoint(
         ckpt_dir / "ckpt_final.pt", model, optimizer, max_iters, tokens_seen, final_val, config.model.as_dict()

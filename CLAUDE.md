@@ -119,6 +119,19 @@ zero, stop — that is the failure mode that wasted the first version of this pr
 
 Never launch a multi-hour GPU run without a passing smoke run on the same commit.
 
+On the GPU box itself, run the preflight before each long run. It exercises the real config for a
+handful of steps and reports throughput, projected wall clock and peak memory, then exits non-zero
+if anything is unhealthy:
+
+```bash
+uv run -m scripts.preflight --config_path configs/nanokimi_25m.yaml \
+  --output_dir results/raw/YYMMDD_preflight_25m --steps 20
+```
+
+CPU tests cannot reach the CUDA-only paths (pinned-memory transfers, compiled CUDA graphs, real
+autocast), so the preflight is what covers them. A bf16 autocast crash in the MoE layer survived
+the entire CPU suite and would have killed every H100 run on its first step.
+
 ---
 
 # Testing

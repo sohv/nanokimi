@@ -2,6 +2,27 @@
 
 Append an entry as soon as a run finishes. Numbers come from `summary.json`, not stdout.
 
+## 260803 — systematic test pass caught two real bugs before GPU time
+
+**What:** Extended coverage from the model/optimizer into data, config, training and numerics —
+89 tests across five files, plus a `scripts/preflight.py` that runs the real config for a few steps
+on the target machine and reports throughput, memory and health.
+
+**Result:** two genuine bugs, both silent and both fatal to the study.
+(1) `get_batch` fell back to `np.random.default_rng()` with no seed, so `set_seed` never governed
+data order and no run was reproducible — directly violating the Phase 2 requirement that data order
+be fixed across sizes. Training now uses an explicitly seeded generator, with a separate stream for
+eval so eval cadence cannot shift which tokens a run trains on.
+(2) The MoE layer crashed under bf16 autocast: `index_add_` refuses a fp32 destination with a bf16
+source. All four scaling configs specify `dtype: bfloat16`, so every H100 run would have died on its
+first forward. The Shakespeare smoke run missed it because it uses float32 on CPU, where autocast is
+a no-op. Also confirmed `torch.compile` matches eager on the MLA path, which had never been tested.
+
+**Command:** `uv run -m pytest tests/ -q`
+
+**Output:** 89 passed. Preflight on this Mac projects 121 h for the 25M budget, which is the argument
+for the H100.
+
 ## 260802 — tokenized the fixed 4B-token OpenWebText slice
 
 **What:** Phase 1. Streamed `Skylion007/openwebtext` (8.01M docs, parquet), shuffled with seed 42,

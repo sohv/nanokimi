@@ -407,7 +407,10 @@ class MoELayer(nn.Module):
                 rank = (top_k_scores[token_idx] * hit[token_idx]).sum(dim=-1)
                 token_idx = token_idx[torch.topk(rank, self.expert_capacity).indices]
             weight = (top_k_scores[token_idx] * hit[token_idx]).sum(dim=-1, keepdim=True)
-            output.index_add_(0, token_idx, weight * self.experts[expert_idx](x_flat[token_idx]))
+            # Under autocast the experts emit bf16 while `output` stays fp32, and
+            # index_add_ refuses mixed dtypes. Cast so the sum stays in fp32.
+            contribution = (weight * self.experts[expert_idx](x_flat[token_idx])).to(output.dtype)
+            output.index_add_(0, token_idx, contribution)
 
         return output.view(B, T, C), self._compute_load_balance_loss(gate_scores, top_k_indices)
 
