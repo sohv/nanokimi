@@ -7,6 +7,7 @@ sizes cannot be confounded by different data.
 
 import json
 import logging
+from itertools import islice
 from pathlib import Path
 
 import numpy as np
@@ -23,17 +24,28 @@ DATASET = "Skylion007/openwebtext"
 assert tiktoken.get_encoding(ENCODING).n_vocab < np.iinfo(TOKEN_DTYPE).max
 
 
-def _write_split(stream, handle, target_tokens: int, enc, desc: str) -> int:
-    """Consume documents from the stream until target_tokens have been written."""
+def _write_split(stream, handle, target_tokens: int, enc, desc: str, batch_docs: int = 256) -> int:
+    """Consume documents from the stream until target_tokens have been written.
+
+    Documents are encoded in batches because tiktoken's encode_ordinary_batch
+    releases the GIL and runs its rust core in parallel, which is several times
+    faster than encoding one document at a time.
+    """
     written = 0
     with tqdm(total=target_tokens, desc=desc, unit="tok", unit_scale=True) as bar:
         while written < target_tokens:
-            ids = enc.encode_ordinary(next(stream)["text"])
-            ids.append(enc.eot_token)
-            chunk = np.array(ids, dtype=TOKEN_DTYPE)
-            handle.write(chunk.tobytes())
-            written += len(chunk)
-            bar.update(len(chunk))
+            texts = list(islice(stream, batch_docs))
+            if not texts:
+                raise RuntimeError(
+                    f"{DATASET} exhausted after {written:,} tokens while targeting {target_tokens:,}; "
+                    "lower --max_tokens or pick a larger corpus"
+                )
+            for ids in enc.encode_ordinary_batch([doc["text"] for doc in texts]):
+                ids.append(enc.eot_token)
+                chunk = np.array(ids, dtype=TOKEN_DTYPE)
+                handle.write(chunk.tobytes())
+                written += len(chunk)
+                bar.update(len(chunk))
     return written
 
 

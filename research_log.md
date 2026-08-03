@@ -2,6 +2,23 @@
 
 Append an entry as soon as a run finishes. Numbers come from `summary.json`, not stdout.
 
+## 260802 — tokenized the fixed 4B-token OpenWebText slice
+
+**What:** Phase 1. Streamed `Skylion007/openwebtext` (8.01M docs, parquet), shuffled with seed 42,
+and tokenized once with tiktoken gpt2 into flat uint16 .bin files. The validation slice is drawn
+first off the same shuffled stream so it matches the training distribution but never appears in any
+model's training prefix.
+
+**Result:** 4,010,276,740 train tokens (8.02 GB) and 2,029,483 val tokens. Sustained ~1.5M tokens/s,
+~35 min wall clock. Validated: file sizes match meta.json exactly; max token id 50256 < vocab 50257
+so uint16 is safe; 1,135 tokens/doc average, matching OpenWebText's known figure; decoded samples
+from both splits are clean English; no train/val overlap; all four size budgets
+(0.50B / 1.00B / 2.46B / 4.01B) fit as strict prefixes of the same train.bin.
+
+**Command:** `uv run -m scripts.prepare_data --dataset openwebtext --output_dir data/processed/openwebtext --max_tokens 4_010_000_000 --val_tokens 2_000_000 --seed 42`
+
+**Output:** `data/processed/openwebtext/` (gitignored; train.bin, val.bin, meta.json)
+
 ## 260802 — Shakespeare smoke run on the rebuilt stack
 
 **What:** first end-to-end run after replacing the fake Muon with real MuonClip, the fake latent
