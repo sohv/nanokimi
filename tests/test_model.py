@@ -259,3 +259,48 @@ def test_torch_compile_matches_eager():
     with torch.no_grad():
         got = compiled(ids)[0]
     assert torch.allclose(eager, got, atol=1e-4), f"max|d| = {(eager - got).abs().max():.3e}"
+
+
+def test_expert_capacity_drops_tokens_only_while_training():
+    """apply_expert_capacity is a user-facing option; the drop path was untested."""
+    layer = MoELayer(64, num_experts=2, expert_capacity=4, top_k=1, apply_expert_capacity=True)
+    x = torch.randn(1, 64, 64)
+
+    layer.train()
+    out_train, _ = layer(x)
+    dropped = int((out_train.view(-1, 64).abs().sum(-1) == 0).sum())
+    assert dropped > 0, "capacity should bind with 64 tokens and capacity 4"
+
+    layer.eval()
+    with torch.no_grad():
+        out_eval, _ = layer(x)
+    assert int((out_eval.view(-1, 64).abs().sum(-1) == 0).sum()) == 0
+
+
+def test_expert_capacity_keeps_the_highest_affinity_tokens():
+    """Dropping was random before; it must now keep the tokens the router preferred."""
+    torch.manual_seed(0)
+    layer = MoELayer(32, num_experts=2, expert_capacity=3, top_k=1, apply_expert_capacity=True).train()
+    x = torch.randn(1, 32, 32)
+    a, _ = layer(x)
+    b, _ = layer(x)
+    assert torch.equal(a, b), "capacity selection must be deterministic, not random"
+
+
+def test_explicit_attention_mask_is_honoured():
+    """Both attention classes accept a mask argument that nothing currently passes."""
+    for attn in (
+        MultiHeadLatentAttention(n_embd=64, n_head=2, kv_lora_rank=32, q_lora_rank=48,
+                                 qk_nope_head_dim=32, qk_rope_head_dim=16, v_head_dim=32,
+                                 max_seq_len=16),
+        MultiHeadAttention(n_embd=64, n_head=2),
+    ):
+        attn.eval()
+        x = torch.randn(1, 8, 64)
+        mask = torch.ones(1, 1, 8, 8).tril()
+        with torch.no_grad():
+            masked = attn(x, mask=mask)
+            default = attn(x)
+        assert torch.isfinite(masked).all()
+        # the supplied mask is the same causal mask the default builds
+        assert torch.allclose(masked, default, atol=1e-6), type(attn).__name__

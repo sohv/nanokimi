@@ -146,3 +146,20 @@ def test_real_slice_covers_every_planned_budget():
     }
     for name, budget in budgets.items():
         assert budget <= meta["train_tokens"], f"{name} needs {budget:,}, slice has {meta['train_tokens']:,}"
+
+
+def test_legacy_meta_pkl_is_still_readable(tmp_path):
+    """Older runs wrote meta.pkl; the loader must keep reading them."""
+    import pickle
+
+    meta = {"vocab_size": 50257, "train_tokens": 10, "val_tokens": 2}
+    (tmp_path / "meta.pkl").write_bytes(pickle.dumps(meta))
+    assert load_meta(tmp_path) == meta
+
+
+def test_meta_json_wins_over_meta_pkl(tmp_path):
+    import pickle
+
+    (tmp_path / "meta.pkl").write_bytes(pickle.dumps({"vocab_size": 1}))
+    (tmp_path / "meta.json").write_text(json.dumps({"vocab_size": 50257}))
+    assert load_meta(tmp_path)["vocab_size"] == 50257

@@ -320,3 +320,90 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_invalid_hyperparameters_are_rejected():
+    """Validation branches must actually fire rather than silently accepting nonsense."""
+    params = [nn.Parameter(torch.randn(4, 4))]
+    for kwargs, message in [
+        (dict(lr=-1.0), "learning rate"),
+        (dict(eps=-1e-8), "epsilon"),
+        (dict(momentum=1.0), "momentum"),
+        (dict(momentum=-0.1), "momentum"),
+        (dict(weight_decay=-0.1), "weight_decay"),
+    ]:
+        try:
+            MuonClip(params, **kwargs)
+        except ValueError as exc:
+            assert message in str(exc), f"{kwargs} -> {exc}"
+        else:
+            raise AssertionError(f"{kwargs} should have been rejected")
+
+
+def test_step_accepts_a_closure():
+    m = nn.Linear(8, 4)
+    opt = MuonClip(list(m.parameters()), lr=1e-3, qk_clip_tau=None)
+
+    calls = []
+
+    def closure():
+        calls.append(1)
+        loss = m(torch.randn(2, 8)).sum()
+        loss.backward()
+        return loss
+
+    returned = opt.step(closure)
+    assert len(calls) == 1
+    assert returned is not None
+
+
+def test_parameters_without_gradients_are_skipped():
+    """A frozen parameter must not crash the step or be silently updated."""
+    m = nn.Sequential(nn.Linear(8, 8), nn.Linear(8, 4))
+    m[0].weight.requires_grad_(False)
+    before = m[0].weight.detach().clone()
+
+    opt = MuonClip(list(m.parameters()), lr=1e-2, qk_clip_tau=None)
+    m(torch.randn(2, 8)).sum().backward()
+    opt.step()
+
+    assert torch.equal(m[0].weight, before)
+
+
+def test_muon_flattens_higher_rank_tensors():
+    """Newton-Schulz needs a matrix; conv-style 4D weights collapse to one."""
+    p = nn.Parameter(torch.randn(8, 4, 3, 3))
+    opt = MuonClip([p], lr=1e-2, qk_clip_tau=None)
+    p.grad = torch.randn_like(p)
+    before = p.detach().clone()
+    opt.step()
+    assert p.shape == before.shape
+    assert not torch.equal(p, before)
+    assert torch.isfinite(p).all()
+
+
+def test_nesterov_variant_runs_and_differs_from_the_default():
+    def run(nesterov):
+        torch.manual_seed(0)
+        m = nn.Linear(16, 16, bias=False)
+        opt = MuonClip(list(m.parameters()), lr=1e-2, nesterov=nesterov, qk_clip_tau=None)
+        torch.manual_seed(1)
+        x = torch.randn(4, 16)
+        for _ in range(3):
+            m(x).sum().backward()
+            opt.step()
+            opt.zero_grad()
+        return m.weight.detach().clone()
+
+    assert not torch.equal(run(False), run(True))
+
+
+def test_qk_clip_can_be_disabled():
+    model = KimiK2(TOY)
+    opt = create_muon_optimizer(model, dict(learning_rate=1e-3, qk_clip_tau=None))
+    assert opt.qk_clip_tau is None
+    ids = torch.randint(0, TOY["vocab_size"], (2, TOY["block_size"]))
+    _, loss = model(ids, ids)
+    loss.backward()
+    opt.step()
+    assert opt.last_clipped_heads == 0

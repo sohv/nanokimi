@@ -2,6 +2,29 @@
 
 Append an entry as soon as a run finishes. Numbers come from `summary.json`, not stdout.
 
+## 260803 — coverage audit: 80% to 99%, third bug found
+
+**What:** Audited the gaps I had written off as untestable. Most were not. Of roughly sixteen
+dismissed items only five were genuinely blocked; the rest needed a stub, not a GPU or a network.
+Closed them: the OpenWebText `prepare()` orchestration via a fake `load_dataset`, the exported
+modeling file's HF surface (`generate`, `attention_mask`, `inputs_embeds`, `return_dict=False`,
+embedding accessors), the dense baseline paths, `apply_expert_capacity=True`, every optimizer
+validation branch, the closure and frozen-parameter paths, legacy `meta.pkl`, optimizer-state
+resume, and the wandb and Hub-push paths behind fakes.
+
+**Result:** a third real bug. `KimiK2.__init__` stored the caller's config dict by reference and
+`crop_block_size` mutates `self.config`, so cropping one model silently rewrote the config every
+other model was built from. It surfaced as a test failing for a reason unrelated to what it tested.
+Fixed with a copy. Coverage 80% -> 99%, 89 -> 163 tests. Two of the new tests assert the exported
+remote-code file stays numerically identical to the library implementation, since the two duplicate
+the architecture by design and can drift silently.
+
+**Command:** `uv run -m coverage run --source=src/nanokimi -m pytest tests/ -q`
+
+**Output:** 163 passed. Five statements remain uncovered, each inside an explicit CUDA guard
+(`schedule.py:19,34`, `loop.py:81-82`, `loader.py:84`) and therefore unreachable off-GPU. They are
+the hot path of every real run and are what `scripts/preflight.py` exists to cover.
+
 ## 260803 — systematic test pass caught two real bugs before GPU time
 
 **What:** Extended coverage from the model/optimizer into data, config, training and numerics —

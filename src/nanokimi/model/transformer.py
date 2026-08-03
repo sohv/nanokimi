@@ -112,7 +112,10 @@ class KimiK2(nn.Module):
         super().__init__()
         assert config['vocab_size'] is not None
         assert config['block_size'] is not None
-        self.config = config
+        # Copy rather than alias: crop_block_size mutates self.config, and holding the
+        # caller's dict meant cropping one model silently changed the config every
+        # other model was built from.
+        self.config = dict(config)
 
         # MLA carries position information through RoPE, so learned absolute
         # position embeddings are redundant there and are dropped. The dense

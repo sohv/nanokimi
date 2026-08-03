@@ -290,3 +290,85 @@ def test_training_does_not_collapse_weights_or_kill_experts(tmp_path, toy_data_d
             used = sum(int((idx == e).any().item()) for e in range(TOY_MODEL["num_experts"]))
             assert used >= 2, f"router collapsed to {used} experts"
             x, _ = block(x)
+
+
+def test_load_checkpoint_restores_optimizer_state(tmp_path):
+    """Resuming a run needs the momentum buffers, not just the weights."""
+    set_seed(0)
+    model = KimiK2(TOY_MODEL)
+    optimizer = create_muon_optimizer(model, vars(OptimizerConfig()))
+    ids = torch.randint(0, TOY_MODEL["vocab_size"], (2, 16))
+    for _ in range(3):
+        _, loss = model(ids, ids)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+    path = save_checkpoint(tmp_path / "ckpt.pt", model, optimizer, 3, 99, 1.0, dict(TOY_MODEL))
+
+    restored_model = KimiK2(TOY_MODEL)
+    restored_opt = create_muon_optimizer(restored_model, vars(OptimizerConfig()))
+    load_checkpoint(path, restored_model, restored_opt)
+
+    assert len(restored_opt.state) == len(optimizer.state)
+    buffers = [s["momentum_buffer"] for s in restored_opt.state.values() if "momentum_buffer" in s]
+    assert buffers and any(b.abs().sum() > 0 for b in buffers)
+
+
+def test_metrics_round_floats_inside_lists(tmp_path):
+    with MetricsWriter(tmp_path) as writer:
+        writer.log(step=0, values=[1.23456789, 2.3456789], pair=(0.111111, 0.222222))
+    record = json.loads((tmp_path / "metrics.jsonl").read_text().strip())
+    assert record["values"] == [1.2346, 2.3457]
+    assert record["pair"] == [0.1111, 0.2222]
+
+
+def test_git_hash_reports_unknown_outside_a_repo(tmp_path, monkeypatch):
+    import subprocess
+
+    from nanokimi.utils import config as config_module
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=128, stdout="", stderr="")
+
+    monkeypatch.setattr(config_module.subprocess, "run", fake_run)
+    assert config_module.git_hash() == "unknown"
+
+
+def test_get_device_falls_back_to_cpu(monkeypatch):
+    """The cpu branch is unreachable on a machine with MPS unless both are disabled."""
+    import torch as torch_module
+
+    from nanokimi.training import schedule
+
+    monkeypatch.setattr(torch_module.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch_module.backends.mps, "is_available", lambda: False)
+    assert schedule.get_device("auto") == "cpu"
+
+
+def test_train_logs_to_wandb_when_a_project_is_set(tmp_path, toy_data_dir, monkeypatch):
+    """The wandb branch never fires in tests otherwise, so a typo would reach a real run."""
+    logged, summary_keys, finished = [], {}, []
+
+    class FakeRun:
+        summary = summary_keys
+
+        def log(self, record):
+            logged.append(record)
+
+        def finish(self):
+            finished.append(True)
+
+    import wandb
+
+    monkeypatch.setattr(wandb, "init", lambda **kwargs: FakeRun())
+
+    config = make_run_config(tmp_path / "run", toy_data_dir)
+    config.wandb_project = "nanokimi-test"
+    config.run_name = "unit"
+    summary = train(config)
+
+    assert logged, "nothing was logged to wandb"
+    assert any("train_loss" in record for record in logged)
+    assert finished == [True]
+    assert summary_keys["final_val_loss"] == summary["final_val_loss"]
